@@ -14,13 +14,11 @@ from mpi4py import MPI
 comm = MPI.COMM_WORLD
 rank, size = comm.rank, comm.size
 logger = logging.getLogger(__name__)
-import matplotlib.pyplot as plt
-import h5py
-import matplotlib.pyplot as plt
-import matplotlib.animation as animation
 
-from matplotlib.colors import LinearSegmentedColormap
-from dedalus.extras.plot_tools import plot_bot_2d
+import h5py
+import pathlib
+
+date = '08-16-2024'
 
 # Initial Condition Constants
 u_0x = 0
@@ -32,39 +30,46 @@ C_0 = 1
 ft_0 = 0
 
 # Dimensional parameters
-UU = 0    
+UU = 0    #!!!!
 T_B = 20  # C  
 c_p = 4.2  # J/g*C
 L_T = 3.34*(10**2)  # J/g
-C_B = 2  # g/kg
-nu = 1.3*(10**-1)   # cm**2/s; physical viscosity is 10 times smaller.
-kappa = 1.3 *(10**-2) # cm**2/s; NEVER USED (physical value 10 times smaller)
-mu = 1.3*(10**-3)   # cm**2/s; NEVER USED (physical value 10 times smaller)
-em = 0.056  # C/(g/kg)
-LL, HH = 10, 5  # cm
-ll, hh = 2, 2  # cm
-epsilon = 0.04   # cm
+C_B = 14 # g/kg    # Salinity: from 0 to 200  
+
+nu = 1.3 *(10**-2)   
+em = 0.056  # C/(g/kg)    note: how much the melting temperature changes per unit change in the concentration of solutes.
+LL, HH = 5, 2.5  # cm
+ll, hh = 1, 1  # cm
+epsilon = 0.04  # cm          phase field interface thickness
+epsilon_name = '04'
 # Parameters
 Lx, Lz = LL,HH
-Nx, Nz = 256, 128
+Nx, Nz = 512,256
 dealias = 3/2
+ 
 
-stop_sim_time = 2 #20   
+
+sim_dt = 0.1  # frequency of saving files
+stop_sim_time = 24*3600
 
 timestepper = d3.RK222
-timestep = 1e-4
-max_timestep = 1e-4  # will need to adjust to constant
+timestep = (1e-4)/5
+max_timestep = (1e-4)/5 # will need to adjust to constant
 dtype = np.float64
 
 
 # Non-dimensional parameters
-Pr = 7
-Sc = 50/4
+Pr = 7 
+Pr_name = 7
+Sc = 12.5
+# Sc_name = Sc
+# Sc_name = '125e-1'
+
 delta = 1*(10**-4) 
 beta = 4/2.648228  
 Re = 1 / nu
 SS = L_T / (c_p * T_B)
-MM = (em * C_B * C_0) #/ T_B
+MM = (em * C_B * C_0)/ T_B
 AA = epsilon * (SS * Re * Pr) * (5 / 6)
 AA = np.float64(AA)
 GG = epsilon
@@ -75,19 +80,52 @@ rho0 = sw.dens0(s=C_B * C_0, t=T_B)
 # rho0 = sw.dens0(s=5, t=20)
 
 
-# new                            
-ww = 7.2921 * (10**-5) # angular velocity      change the value later
-phi = np.deg2rad(43.7) #  latitude.           change it later
-f_c = 2*ww* np.sin(phi) # Coriolis parameter
-f_c_r = 2*ww* np.cos(phi) # reciprocal Coriolis parameter
+# new  
+latitude = 10
+rmp = 0 
+ww = rmp * 2 * np.pi / 60
+# period = 60/rmp
+# phi = np.deg2rad(latitude) #  latitude.         
+# f_c = 2*ww* np.sin(phi) # Coriolis frequency
+# f_c_r = 2*ww* np.cos(phi) # reciprocal Coriolis frequency
+f_c = 0
+ww_name = f'{rmp}rmp'
+
+print('\n')
+# print(f'\nPeriod of rotation = {period} s')
+print(f'angluar velocity is {ww} rad/s  or {ww_name}')
+# print(f'latitude = {latitude} degree')
+print(f'coriolis parameter is {f_c} \n')
+print(f'nu is {nu} \n')
+print(f'HR means Half Ratio:\nIce:1x1 Container:5x2.5')
+
+
+print(f'\npython file name is :\n{date}_w{ww_name}_T{T_B}_C{C_B}_HR.py \n')
+# print(f'\npython file name is :\n{date}_w{ww_name}_T{T_B}_C{C_B}_HR_Sc{Sc_name}.py \n')
+# print(f'script name is: \ns_T{T_B}_C{C_B}_w{ww_name}_HR_eps{epsilon_name}.sh \n')
+# print(f'script name is: \ns_T{T_B}_C{C_B}_w{ww_name}_HR_Sc{Sc_name}.sh \n')
+# print(f'script name is: \ns_T{T_B}_C{C_B}_w{ww_name}_HR_Sc{Sc_name}.sh \n')
+print(f'script name is: \ns_T{T_B}_C{C_B}_w{ww_name}_HR.sh \n')
+
+# print(f'snapshots_{date}_w{ww_name}_T{T_B}_C{C_B}_HR_Sc{Sc_name}') 
+# print(f'profiles_{date}_w{ww_name}_T{T_B}_C{C_B}_HR_Sc{Sc_name}')
+# print(f'timeseries_{date}_w{ww_name}_T{T_B}_C{C_B}_HR_Sc{Sc_name}')
+
+print(f'snapshots_{date}_w{ww_name}_T{T_B}_C{C_B}_HR') 
+# print(f'profiles_{date}_w{ww_name}_T{T_B}_C{C_B}_HR')
+print(f'timeseries_{date}_w{ww_name}_T{T_B}_C{C_B}_HR')
+
+
+
+
 
 # Bases
 coords = d3.CartesianCoordinates('x', 'z')
 dist = d3.Distributor(coords, dtype=dtype)
 
 
-xbasis = d3.RealFourier(coords['x'], size=256, bounds=(0, Lx), dealias=dealias)
-zbasis = d3.Chebyshev(coords['z'], size=128, bounds=(0, Lz), dealias=dealias) # check if its not 2
+xbasis = d3.RealFourier(coords['x'], size=Nx, bounds=(0, Lx), dealias=dealias)
+zbasis = d3.Chebyshev(coords['z'], size=Nz, bounds=(0, Lz), dealias=dealias) # check if its not 2
 
 # Fields
 p = dist.Field(name='p', bases=(xbasis, zbasis))
@@ -110,7 +148,7 @@ tau_u1 = dist.VectorField(coords, name='tau_u1', bases=xbasis)
 tau_u2 = dist.VectorField(coords, name='tau_u2', bases=xbasis)
 tau_v1 = dist.Field(name='tau_v1', bases=xbasis)
 tau_v2 = dist.Field(name='tau_v2', bases=xbasis)
-
+tau_C_Phase = dist.Field(name= 'tau_C_Phase')
 
 # new
 x = xbasis.local_grid(dist=dist, scale=1)
@@ -155,6 +193,7 @@ grad_T = d3.grad(T) + ez*lift(tau_T1)  # First-order reduction
 grad_C = d3.grad(C) + ez*lift(tau_C1)  # First-order reduction
 
 
+
 # #new
 def compute_buoyancy(C,T):
     buoyancy_array = -9.8 * 100 * (sw.dens0(C_B * C, T_B * T) - rho0) / rho0
@@ -177,6 +216,7 @@ Phase_expr = ( sigmoid(z - (HH - hh), a=2 * epsilon) *
     sigmoid(-(x - (LL + ll) / 2), a=2 * epsilon))
 
 
+
 # Problem
 
 problem = d3.IVP([p,b,C, T, u, v,Phase,Phase_t, tau_p, tau_T1, tau_T2, tau_u1, tau_u2,
@@ -184,7 +224,7 @@ problem = d3.IVP([p,b,C, T, u, v,Phase,Phase_t, tau_p, tau_T1, tau_T2, tau_u1, t
 problem.add_equation("b = buoyancy * par  ")  
 problem.add_equation("trace(grad_u) + tau_p = 0")
 problem.add_equation("dt(T) - (1/(Pr*Re)) * div(grad_T) + lift(tau_T2) - SS*dt(Phase) = -(1-Phase) * (u@grad(T) + T * (u@grad(Phase))) - (wall/eta)*(T-1)") 
-problem.add_equation("dt(C) - (1/(Sc*Re))*div(grad_C) + lift(tau_C2) = -(1-Phase)* u@grad(C) + (C*Phase_t - grad_C@grad_Phase)/((Sc*Re)*(1-Phase+delta))- (wall/eta)*(C-1)") 
+problem.add_equation("dt(C) - (1/(Sc*Re))*div(grad_C) + lift(tau_C2) = -u@grad(C) + (C*Phase_t - (grad_C@grad_Phase)/(Sc*Re))/(1-Phase+delta)- (wall/eta)*(C-1)") 
 problem.add_equation(" dt(u) + grad(p)  - (1/Re)*div(grad_u) + lift(tau_u2) - f_c*(v*ex) = b*ez  - u@grad(u) - (Phase/eta)*u - (wall/eta)*u") 
 problem.add_equation("(AA/epsilon)*dt(Phase) - (GG/epsilon)*div(grad_Phase) + lift(tau_Phase2) = - (1/epsilon**2)*Phase*(1-Phase)*((GG/epsilon)*(1-2*Phase) + (T+MM*C))")
 problem.add_equation("dt(v) + f_c*(u@ex) + - (1/Re)*div(grad_v) + lift(tau_v2) = - u@grad(v)- (wall/eta)*v")
@@ -217,52 +257,69 @@ b['g'] = -9.8 * 100 * (sw.dens0(C_B * C['g'], T_B * T['g']) - rho0) / rho0
 
 
 
+print(f'T = {T_B}')
+print(f'C = {C_B}')
+print(f'Sc = {Sc}')
+print(f'Pr = {Pr}')
+print(f'nu  = {nu}')
+print(f'Initial Ice volume: {ll} x {hh} cm')
+print(f'Container: {LL} x {HH} cm')
+print(f'epsilon = {epsilon}')
+print(f'time step = {timestep}')
+print(f'grid:{Nx}x{Nz} \n')
+
+
 # # Solver
 solver = problem.build_solver(timestepper)
-solver.evaluate_handlers_now(dt=0)
+
+# solver.evaluate_handlers_now(dt=0)
 solver.stop_sim_time = stop_sim_time
+
+
 
 # Analysis
 # 2D fields
-snapshots = solver.evaluator.add_file_handler(
-    'snapshots', sim_dt=0.25, max_writes=50)  
+snapshots = solver.evaluator.add_file_handler(f'snapshots_{date}_w{ww_name}_T{T_B}_C{C_B}_HR', sim_dt= sim_dt) #  max_writes=50
+profiles = solver.evaluator.add_file_handler(f'profiles_{date}_w{ww_name}_T{T_B}_C{C_B}_HR', sim_dt=sim_dt)
+timeseries = solver.evaluator.add_file_handler(f'timeseries_{date}_w{ww_name}_T{T_B}_C{C_B}_HR', sim_dt=sim_dt)
+
+
 
 task_names = ['buoyancy', 'Temperature', 'Concentration', 'Phase', 'Phase_t', 'spanwise vorticity', 'vertical vorticity','x velocity','z velocity','y velocity']
-tasks = [b, T, C, Phase, Phase_t, -d3.div(d3.skew(u)), dx(v), u@ex , u@ez, v ]
+tasks = [b, T, C, Phase, Phase_t, -d3.div(d3.skew(u)), dx(v), u@ex , u@ez, v ] 
 
 for task, name in zip(tasks, task_names):
     if name not in snapshots.tasks:
         snapshots.add_task(task, name=name)
 
-# 1D vertical profiles
-profiles = solver.evaluator.add_file_handler('profiles', sim_dt=0.25)
-profiles.add_task(d3.Average(b, 'x'), name='b')  
-profiles.add_task(d3.Average(T, 'x'), name='T') 
-profiles.add_task(d3.Average(C, 'x'), name='C')  
-profiles.add_task(d3.Average(Phase, 'x'), name='Phase')   
-profiles.add_task(d3.Average(Phase_t, 'x'), name='Phase_t')   
-profiles.add_task(d3.Average(u@ex, 'x'), name='u')
-profiles.add_task(d3.Average(v, 'x'), name='v')
+# # 1D vertical profiles
+# profiles.add_task(d3.Average(b, 'x'), name='b')  
+# profiles.add_task(d3.Average(T, 'x'), name='T') 
+# profiles.add_task(d3.Average(C, 'x'), name='C')  
+# profiles.add_task(d3.Average(Phase, 'x'), name='Phase')   
+# profiles.add_task(d3.Average(Phase_t, 'x'), name='Phase_t')   
+# profiles.add_task(d3.Average(u@ex, 'x'), name='u')
+# profiles.add_task(d3.Average(v, 'x'), name='v')
 
 # 0D (time series)
-timeseries = solver.evaluator.add_file_handler('timeseries', sim_dt=0.25)
-
-task_names = ['KE', 'HF', 'CF', 'HCF', 'energy', 'salt', 'volume', 'wb', 'GBP']
+# task_names = ['KE', 'HF', 'CF', 'HCF', 'energy', 'salt', 'volume', 'wb', 'GBP']
+task_names = [ 'salt', 'volume']
 tasks = [
-    d3.Average(0.5*(u@u + v**2) * rho0, ('x', 'z')),
-    d3.Average((u@ez)*T, ('x', 'z')),
-    d3.Average((u@ez)*C, ('x', 'z')),
-    d3.Average(C*(u@ex), ('x', 'z')),
-    d3.Integrate((T - SS*Phase),('x','z')),
+    # d3.Average(0.5*(u@u + v**2) * rho0, ('x', 'z')),
+    # d3.Average((u@ez)*T, ('x', 'z')),
+    # d3.Average((u@ez)*C, ('x', 'z')),
+    # d3.Average(C*(u@ex), ('x', 'z')),
+    # d3.Integrate((T - SS*Phase),('x','z')),
     d3.Integrate((1-Phase)*C,('x','z')),
     d3.Integrate(Phase, ('x', 'z')),
-    d3.Average((u@ez)*b, ('x', 'z')),
-    d3.Average(b*(u@ex), ('x', 'z'))
+    # d3.Average((u@ez)*b, ('x', 'z')),
+    # d3.Average(b*(u@ex), ('x', 'z'))
 ]
 
 for task, name in zip(tasks, task_names):
     if name not in timeseries.tasks:
         timeseries.add_task(task, name=name)
+
 
 
 # CFL
@@ -283,32 +340,36 @@ solver.stop_sim_time = stop_sim_time
 solver.stop_wall_time = np.inf
 solver.stop_iteration = np.inf
 
+
 # Main loop
 startup_iter = 10
 try:
     logger.info('Starting main loop')
+    # initial_phase_volume = 1  # Set initial phase volume
+    # target_phase_volume = initial_phase_volume * 0.1  # Increase by 10 percent
     while solver.proceed:
-        # timestep = dt #CFL.compute_timestep()
         timestep = CFL.compute_timestep()
         solver.step(timestep)
-      
+        # current_phase_volume = d3.Integrate(Phase, ('x', 'z'))['g'].mean()
+        
 
-        if (solver.iteration-1) % 10 == 0:
+        # if current_phase_volume <= target_phase_volume:
+        #     logger.info('Volume reached 10 percent of initial volume. Stopping simulation.')
+        #     break
+
+        if (solver.iteration-1) % 1000 == 0:
             max_Re = flow.max('Re')
             logger.info('Iteration=%i, Time=%e, dt=%e, max(Re)=%f' %
                         (solver.iteration, solver.sim_time, timestep, max_Re))
+            # logger.info(f'Current volume: {current_phase_volume} (Target: {target_phase_volume})')
             # logger.info('Field b: %s', b['g']) 
-            # logger.info('Field u: %s', u['g'])
-            # logger.info('Field T: %s', T['g']) 
-            logger.info('Field C: %s', C['g']) 
-            # logger.info('Field Phase: %s', Phase['g'])
-      
 
 except:
-    logger.error('Exception raised, triggering end of main loop.')
+    logger.error(f'Exception raised:', exc_info=True)
     raise
 finally:
     solver.log_stats()
+
 
 
 
