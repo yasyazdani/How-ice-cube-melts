@@ -30,7 +30,7 @@ C_0 = 1
 ft_0 = 0
 
 # Dimensional parameters
-UU = 0    #!!!!
+UU = 0    
 T_B = 20  # C  
 c_p = 4.2  # J/g*C
 L_T = 3.34*(10**2)  # J/g
@@ -53,7 +53,7 @@ sim_dt = 0.1  # frequency of saving files
 stop_sim_time = 24*3600
 
 timestepper = d3.RK222
-timestep = (1e-4)/5
+timestep = (1e-4)/5  # can be 0.001 for zero saliniry.
 max_timestep = (1e-4)/5 # will need to adjust to constant
 dtype = np.float64
 
@@ -77,12 +77,12 @@ GG = np.float64(GG)
 eta = 10**-1 * Re * (beta * epsilon) ** 2  # not "optimal"
 eta = np.float64(eta) 
 rho0 = sw.dens0(s=C_B * C_0, t=T_B)
-# rho0 = sw.dens0(s=5, t=20)
+
 
 
 # new  
 latitude = 10
-rmp = 0 
+rmp = 0 # or more
 ww = rmp * 2 * np.pi / 60
 # period = 60/rmp
 # phi = np.deg2rad(latitude) #  latitude.         
@@ -92,9 +92,9 @@ f_c = 0
 ww_name = f'{rmp}rmp'
 
 print('\n')
-# print(f'\nPeriod of rotation = {period} s')
+print(f'\nPeriod of rotation = {period} s')
 print(f'angluar velocity is {ww} rad/s  or {ww_name}')
-# print(f'latitude = {latitude} degree')
+print(f'latitude = {latitude} degree')
 print(f'coriolis parameter is {f_c} \n')
 print(f'nu is {nu} \n')
 print(f'HR means Half Ratio:\nIce:1x1 Container:5x2.5')
